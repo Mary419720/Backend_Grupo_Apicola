@@ -62,6 +62,14 @@ const presentacionSchema = new mongoose.Schema({
   activo: {
     type: Boolean,
     default: true
+  },
+  eliminado: {
+    type: Boolean,
+    default: false
+  },
+  fecha_eliminacion: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: { createdAt: 'fecha_creacion', updatedAt: 'fecha_actualizacion' },
@@ -93,7 +101,8 @@ const productSchema = new mongoose.Schema({
   },
   subcategoria_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Subcategory'
+    ref: 'Subcategory',
+    required: [true, 'La subcategoría es obligatoria.']
   },
   estado_fisico: {
     type: String,
@@ -121,6 +130,14 @@ const productSchema = new mongoose.Schema({
   activo: {
     type: Boolean,
     default: true
+  },
+  eliminado: {
+    type: Boolean,
+    default: false
+  },
+  fecha_eliminacion: {
+    type: Date,
+    default: null
   },
   fecha_creacion: {
     type: Date,
