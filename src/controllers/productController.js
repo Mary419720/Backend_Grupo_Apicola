@@ -123,28 +123,32 @@ exports.getProductById = async (req, res, next) => {
 // @access  Private (Solo administradores)
 exports.updateProduct = async (req, res, next) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { ...req.body, fecha_actualizacion: Date.now() },
-      { new: true, runValidators: true }
-    );
-    
+    const product = await Product.findById(req.params.id);
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: 'Producto no encontrado'
       });
     }
-    
+
+    // Actualizar campos principales del producto
+    Object.assign(product, req.body);
+
+    // El array de presentaciones se reemplaza completamente con los datos del frontend.
+    // Esto simplifica el manejo de añadir, editar y eliminar presentaciones desde el cliente.
+    product.presentaciones = req.body.presentaciones;
+
+    const updatedProduct = await product.save();
+
     res.status(200).json({
       success: true,
       message: 'Producto actualizado exitosamente',
-      data: product
+      data: updatedProduct
     });
   } catch (error) {
     console.error('Error al actualizar producto:', error);
-    
-    // Manejo específico para errores de validación
+
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
       return res.status(400).json({
@@ -153,32 +157,37 @@ exports.updateProduct = async (req, res, next) => {
         errors: messages
       });
     }
-    
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'El código del producto ya existe'
+      });
+    }
+
     next(error);
   }
 };
 
-// @desc    Eliminar un producto (soft delete - marcar como inactivo)
+// @desc    Eliminar un producto (hard delete)
 // @route   DELETE /api/products/:id
 // @access  Private (Solo administradores)
 exports.deleteProduct = async (req, res, next) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { activo: false, fecha_actualizacion: Date.now() },
-      { new: true }
-    );
-    
+    const product = await Product.findById(req.params.id);
+
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Producto no encontrado'
+        message: 'Producto no encontrado',
       });
     }
-    
+
+    await product.remove(); // Usamos remove() para activar el middleware
+
     res.status(200).json({
       success: true,
-      message: 'Producto eliminado exitosamente'
+      message: 'Producto eliminado exitosamente',
     });
   } catch (error) {
     console.error('Error al eliminar producto:', error);
@@ -217,6 +226,43 @@ exports.searchProducts = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Error al buscar productos:', error);
+    next(error);
+  }
+};
+
+// @desc    Obtener todas las presentaciones de un producto
+// @route   GET /api/products/:id/presentaciones
+// @access  Public
+exports.getProductPresentations = async (req, res, next) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Producto no encontrado'
+      });
+    }
+    
+    // Verificar si el producto tiene presentaciones
+    const presentaciones = product.presentaciones || [];
+    
+    res.status(200).json({
+      success: true,
+      count: presentaciones.length,
+      data: presentaciones
+    });
+  } catch (error) {
+    console.error('Error al obtener presentaciones:', error);
+    
+    // Manejo específico para IDs inválidos
+    if (error.kind === 'ObjectId') {
+      return res.status(404).json({
+        success: false,
+        message: 'Producto no encontrado - ID inválido'
+      });
+    }
+    
     next(error);
   }
 };

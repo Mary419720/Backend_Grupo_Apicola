@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
 const testRoutes = require('./routes/testRoutes');
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const subcategoryRoutes = require('./routes/subcategoryRoutes');
 
 // 2. Configuración de la aplicación
 const app = express();
@@ -33,6 +35,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/test', testRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/subcategories', subcategoryRoutes);
 
 app.get('/', (req, res) => {
   res.send('¡Bienvenido al API de Melariu Grupo Apícola!');
@@ -61,15 +65,23 @@ const startServer = async () => {
       console.log(`📚 API disponible en http://localhost:${PORT}/api/test`);
     });
     
-    // Manejo de señales de terminación
-    process.on('SIGINT', () => {
-      console.log('👋 Cerrando servidor y conexión a la BD');
-      server.close(() => {
-        mongoose.connection.close(false, () => {
-          console.log('✅ Conexiones cerradas correctamente');
-          process.exit(0);
-        });
-      });
+    // Manejo de señales de terminación para un cierre elegante
+    process.on('SIGINT', async () => {
+      console.log('👋 Recibida señal de interrupción. Cerrando servidor y conexión a la BD...');
+      try {
+        // Cierra el servidor y espera a que todas las conexiones existentes terminen
+        await new Promise(resolve => server.close(resolve));
+        console.log('✅ Servidor Express cerrado.');
+
+        // Cierra la conexión a la base de datos
+        await mongoose.connection.close();
+        console.log('✅ Conexión a MongoDB cerrada correctamente.');
+        
+        process.exit(0);
+      } catch (error) {
+        console.error('❌ Error durante el cierre elegante:', error);
+        process.exit(1);
+      }
     });
   } catch (error) {
     console.error('❌ Error crítico al iniciar el servidor:', error);

@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "data:import": "node -r dotenv/config scripts/seeder.js -i",
+    "data:destroy": "node -r dotenv/config scripts/seeder.js -d",
     "seed:admin": "node scripts/seedAdmin.js"
   },
   "keywords": [],
