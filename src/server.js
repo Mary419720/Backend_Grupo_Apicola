@@ -9,6 +9,7 @@ const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const subcategoryRoutes = require('./routes/subcategoryRoutes');
+const saleRoutes = require('./routes/saleRoutes');
 const path = require('path');
 
 // 2. Configuración de la aplicación
@@ -41,6 +42,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/subcategories', subcategoryRoutes);
+app.use('/api/sales', saleRoutes);
 
 app.get('/', (req, res) => {
   res.send('¡Bienvenido al API de Melariu Grupo Apícola!');
