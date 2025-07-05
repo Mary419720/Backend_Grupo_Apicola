@@ -1,11 +1,11 @@
-const fs = require('fs');
-const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const path = require('path');
 
-// --- Rutas ajustadas para funcionar desde la carpeta /scripts ---
-// Cargar variables de entorno desde la raíz del backend
+// Cargar variables de entorno ANTES que cualquier otra cosa
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const fs = require('fs');
+const mongoose = require('mongoose');
 
 // Cargar modelos subiendo un nivel en el directorio
 const Product = require('../src/models/product');
@@ -18,10 +18,7 @@ const connectDB = async () => {
     if (!process.env.MONGODB_URI) {
       throw new Error('La variable de entorno MONGODB_URI no está definida. Revisa tu archivo .env');
     }
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(process.env.MONGODB_URI);
     console.log('MongoDB Conectado para el seeder de productos...');
   } catch (err) {
     console.error(`Error de conexión: ${err.message}`);

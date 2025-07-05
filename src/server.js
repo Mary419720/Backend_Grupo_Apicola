@@ -2,6 +2,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const connectDB = require('./config/database');
 const mongoose = require('mongoose');
 const testRoutes = require('./routes/testRoutes');
@@ -29,6 +30,10 @@ const corsOptions = {
   },
   credentials: true // Si necesitas enviar cookies o encabezados de autorización
 };
+// Middleware de compresión GZIP
+// Debe ir antes de cualquier ruta para asegurar que todas las respuestas se compriman
+app.use(compression());
+
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

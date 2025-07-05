@@ -1,68 +1,60 @@
-const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const path = require('path');
 
-// Cargar variables de entorno
+// Cargar variables de entorno ANTES que cualquier otra cosa
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Cargar modelos
+// Ahora sí, cargar el resto de los módulos
+const mongoose = require('mongoose');
 const Category = require('../src/models/Category');
 const Subcategory = require('../src/models/Subcategory');
 
-// Función de conexión a la BD
-const connectDB = async () => {
+// Función principal asíncrona
+async function run() {
+  console.log('Iniciando script para obtener IDs...');
+
   try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error('La variable de entorno MONGODB_URI no está definida.');
-    }
+    // Conectar a la base de datos (sin opciones obsoletas y con timeout)
     await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+        serverSelectionTimeoutMS: 15000
     });
-  } catch (err) {
-    console.error(`Error de conexión: ${err.message}`);
-    process.exit(1);
-  }
-};
+    console.log('Conexión a la base de datos exitosa.');
 
-const fetchAndDisplayIds = async () => {
-  console.log('Conectando a la base de datos...');
-  await connectDB();
-  console.log('Conexión exitosa. Obteniendo datos...\n');
-
-  try {
     // Obtener todas las categorías
+    console.log('\n--- OBTENIENDO CATEGORÍAS ---');
     const categories = await Category.find({}, 'nombre');
-    if (categories.length === 0) {
-      console.log('No se encontraron categorías en la base de datos.');
-    } else {
-      console.log('--- CATEGORÍAS ---');
+    if (categories.length > 0) {
       categories.forEach(cat => {
-        console.log(`Nombre: ${cat.nombre}`);
-        console.log(`  _id: ${cat._id}\n`);
+        console.log(`Nombre: ${cat.nombre}\n  _id: ${cat._id}\n`);
       });
+    } else {
+      console.log('No se encontraron categorías.');
     }
 
-    // Obtener todas las subcategorías y poblarlas con el nombre de la categoría padre
+    // Obtener todas las subcategorías
+    console.log('\n--- OBTENIENDO SUBCATEGORÍAS ---');
     const subcategories = await Subcategory.find({}, 'nombre category').populate('category', 'nombre');
-    if (subcategories.length === 0) {
-      console.log('No se encontraron subcategorías en la base de datos.');
-    } else {
-      console.log('\n--- SUBCATEGORÍAS ---');
+    if (subcategories.length > 0) {
       subcategories.forEach(sub => {
-        const categoryName = sub.category ? sub.category.nombre : 'SIN CATEGORÍA ASIGNADA';
-        console.log(`Nombre: ${sub.nombre} (Categoría: ${categoryName})`);
-        console.log(`  _id: ${sub._id}\n`);
+        const categoryName = sub.category ? sub.category.nombre : 'SIN CATEGORÍA';
+        console.log(`Nombre: ${sub.nombre} (Categoría: ${categoryName})\n  _id: ${sub._id}\n`);
       });
+    } else {
+      console.log('No se encontraron subcategorías.');
     }
+
+    console.log('\nScript finalizado exitosamente.');
 
   } catch (error) {
-    console.error(`Error al obtener los datos: ${error.message}`);
+    console.error('\n--- ERROR EN LA EJECUCIÓN ---');
+    console.error(error);
+    process.exit(1); // Salir con código de error
   } finally {
-    await mongoose.connection.close();
+    // Asegurar que la conexión se cierre
+    await mongoose.disconnect();
     console.log('Conexión a MongoDB cerrada.');
-    process.exit();
   }
-};
+}
 
-fetchAndDisplayIds();
+// Ejecutar la función principal
+run();
