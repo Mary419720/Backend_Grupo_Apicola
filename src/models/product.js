@@ -9,13 +9,22 @@ const presentacionSchema = new mongoose.Schema({
     trim: true,
     uppercase: true
   },
+  sku_normalizado: {
+    type: String
+  },
   formato: {
     type: String,
     trim: true
   },
+  formato_normalizado: {
+    type: String
+  },
   capacidad: {
     type: String,
     trim: true
+  },
+  capacidad_normalizada: {
+    type: String
   },
   precio_venta: {
     type: Number,
@@ -84,10 +93,18 @@ const productSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
+  codigo_normalizado: {
+    type: String,
+    index: true
+  },
   nombre: {
     type: String,
     required: [true, 'El nombre del producto es obligatorio'],
     trim: true
+  },
+  nombre_normalizado: {
+    type: String,
+    index: true
   },
   tipo: {
     type: String,
@@ -112,6 +129,10 @@ const productSchema = new mongoose.Schema({
   descripcion: {
     type: String,
     required: [true, 'La descripción del producto es obligatoria']
+  },
+  descripcion_normalizada: {
+    type: String,
+    index: true
   },
   atributos: {
     type: Object,
@@ -154,9 +175,40 @@ const productSchema = new mongoose.Schema({
   }
 });
 
-// Middleware para actualizar fecha_actualizacion automáticamente
+// Función para normalizar texto (eliminar acentos)
+function normalizeText(text) {
+  if (!text) return '';
+  return text
+    .normalize("NFD")         // Descomponer caracteres acentuados
+    .replace(/[\u0300-\u036f]/g, "") // Eliminar los acentos (marcas diacríticas)
+    .toLowerCase();           // Convertir a minúsculas
+}
+
+// Middleware para actualizar fecha_actualizacion automáticamente y campos normalizados
 productSchema.pre('save', function(next) {
+  // Actualizar fecha
   this.fecha_actualizacion = Date.now();
+  
+  // Generar campos normalizados para búsqueda optimizada
+  this.nombre_normalizado = normalizeText(this.nombre);
+  this.codigo_normalizado = normalizeText(this.codigo);
+  this.descripcion_normalizada = normalizeText(this.descripcion);
+  
+  // Si hay presentaciones, normalizar sus campos también
+  if (Array.isArray(this.presentaciones)) {
+    this.presentaciones.forEach(presentacion => {
+      if (presentacion.sku) {
+        presentacion.sku_normalizado = normalizeText(presentacion.sku);
+      }
+      if (presentacion.formato) {
+        presentacion.formato_normalizado = normalizeText(presentacion.formato);
+      }
+      if (presentacion.capacidad) {
+        presentacion.capacidad_normalizada = normalizeText(presentacion.capacidad);
+      }
+    });
+  }
+  
   next();
 });
 
@@ -168,6 +220,38 @@ productSchema.pre('remove', async function(next) {
   // Ejemplo: await Presentation.deleteMany({ producto_id: this._id });
   next();
 });
+
+// Crear índices para optimizar consultas
+
+// 1. Índice de texto para búsqueda optimizada
+productSchema.index(
+  { 
+    nombre_normalizado: 'text', 
+    codigo_normalizado: 'text', 
+    descripcion_normalizada: 'text' 
+  },
+  {
+    weights: {
+      nombre_normalizado: 10,      // Mayor prioridad para coincidencias en nombre
+      codigo_normalizado: 5,       // Prioridad media para coincidencias en código
+      descripcion_normalizada: 1   // Prioridad normal para coincidencias en descripción
+    },
+    name: "productos_texto_idx"
+  }
+);
+
+// 2. Índices simples para filtros comunes
+productSchema.index({ categoria_id: 1 });
+productSchema.index({ subcategoria_id: 1 });
+productSchema.index({ eliminado: 1 });
+productSchema.index({ activo: 1 });
+
+// 3. Índices compuestos para consultas frecuentes
+productSchema.index({ eliminado: 1, activo: 1 });
+productSchema.index({ fecha_creacion: -1 }); // Para ordenar por más reciente
+
+// NOTA: No necesitamos definir un índice para 'codigo' aquí porque ya está
+// declarado como único en la definición del campo (unique: true)
 
 const Product = mongoose.model('Product', productSchema);
 

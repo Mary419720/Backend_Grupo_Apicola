@@ -39,20 +39,190 @@ exports.createProduct = async (req, res, next) => {
   }
 };
 
-// @desc    Obtener todos los productos (excluyendo eliminados por defecto)
+// @desc    Obtener todos los productos con filtros, búsqueda y paginación
 // @route   GET /api/products
 // @access  Public
 exports.getAllProducts = async (req, res, next) => {
   try {
-    // Por defecto, solo se muestran los productos no eliminados
-    const query = { eliminado: { $ne: true } };
+    // Extraer parámetros de consulta
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      categoria_id,
+      sort = '-fecha_creacion', // Ordenar por fecha de creación descendente por defecto
+      activo
+    } = req.query;
 
-    const products = await Product.find(query).lean();
+    // Convertir página y límite a números
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Construir el objeto de filtro base (siempre excluir productos eliminados)
+    const filter = { eliminado: { $ne: true } };
+
+    // Añadir filtro por estado activo si se proporciona
+    if (activo !== undefined) {
+      filter.activo = activo === 'true';
+    }
+
+    // Añadir filtro por categoría si se proporciona
+    if (categoria_id) {
+      filter.categoria_id = categoria_id;
+    }
+
+    // Añadir búsqueda por texto si se proporciona
+    if (search) {
+      // Función para normalizar texto (eliminar acentos) - igual que en el modelo
+      const normalizeText = text => {
+        if (!text) return '';
+        return text
+          .normalize("NFD")         // Descomponer caracteres acentuados
+          .replace(/[\u0300-\u036f]/g, "") // Eliminar los acentos (marcas diacríticas)
+          .toLowerCase();           // Convertir a minúsculas
+      };
+      
+      // Normalizar el término de búsqueda
+      const normalizedSearch = normalizeText(search);
+      console.log(`Búsqueda: Original='${search}', Normalizada='${normalizedSearch}'`)
+      
+      // Crear patrones de búsqueda que escapen caracteres especiales de regex
+      const escapeRegExp = (string) => {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      };
+      
+      const searchPattern = escapeRegExp(search);
+      const normalizedPattern = escapeRegExp(normalizedSearch);
+      
+      // Crear expresiones regulares seguras
+      const searchRegex = new RegExp(searchPattern, 'i');
+      const normalizedRegex = new RegExp(normalizedPattern, 'i');
+      
+      // Enfoque optimizado: usar los campos normalizados para búsqueda más eficiente
+      filter.$or = [
+        // Búsqueda en campos originales (para compatibilidad)
+        { nombre: searchRegex },
+        { codigo: searchRegex },
+        { descripcion: searchRegex },
+        
+        // Búsqueda optimizada en campos normalizados (más rápida por índices)
+        { nombre_normalizado: normalizedRegex },
+        { codigo_normalizado: normalizedRegex },
+        { descripcion_normalizada: normalizedRegex },
+        
+        // Búsqueda en presentaciones
+        { 'presentaciones.sku': searchRegex },
+        { 'presentaciones.formato': searchRegex },
+        { 'presentaciones.capacidad': searchRegex },
+        
+        // Búsqueda en campos normalizados de presentaciones
+        { 'presentaciones.sku_normalizado': normalizedRegex },
+        { 'presentaciones.formato_normalizado': normalizedRegex },
+        { 'presentaciones.capacidad_normalizada': normalizedRegex }
+      ];
+      
+      // Estrategia híbrida para búsquedas parciales y completas
+      if (normalizedSearch.length >= 3) {
+        // Crear patrones regex para búsqueda por substring y prefijo
+        const prefixNormalizedRegex = new RegExp('^' + escapeRegExp(normalizedSearch), 'i');
+        
+        // IMPORTANTE: Eliminar la búsqueda por $text que estaba interfiriendo
+        // con los resultados cuando se usaba junto con $or
+        
+        // En su lugar, optimizar la búsqueda por regex para todos los casos
+        filter.$or = [
+          // Búsqueda en campos originales para compatibilidad
+          { nombre: searchRegex },
+          { codigo: searchRegex },
+          { descripcion: searchRegex },
+          { 'presentaciones.sku': searchRegex },
+          { 'presentaciones.formato': searchRegex },
+          { 'presentaciones.capacidad': searchRegex },
+          
+          // Búsqueda exacta en campos normalizados (más eficiente por índices)
+          { nombre_normalizado: normalizedRegex },
+          { codigo_normalizado: normalizedRegex },
+          { descripcion_normalizada: normalizedRegex },
+          { 'presentaciones.sku_normalizado': normalizedRegex },
+          { 'presentaciones.formato_normalizado': normalizedRegex },
+          { 'presentaciones.capacidad_normalizada': normalizedRegex },
+          
+          // Búsqueda por prefijo (muy útil para autocompletar)
+          { nombre_normalizado: prefixNormalizedRegex },
+          { codigo_normalizado: prefixNormalizedRegex },
+          { descripcion_normalizada: prefixNormalizedRegex },
+          { 'presentaciones.sku_normalizado': prefixNormalizedRegex },
+          { 'presentaciones.formato_normalizado': prefixNormalizedRegex },
+          { 'presentaciones.capacidad_normalizada': prefixNormalizedRegex }
+        ];
+        
+        // Para palabras completas exactas, usar $text en una consulta separada si es necesario
+        // Esto es para mejorar rendimiento en bases de datos muy grandes
+        if (normalizedSearch.length >= 5 && false) { // Desactivado por ahora
+          // Esta sería una implementación alternativa usando el operador $text
+          // Pero como está causando conflictos, lo dejamos comentado
+          // filter.$text = { $search: normalizedSearch };
+        }
+      }
+      
+      // Nota sobre rendimiento: para bases de datos muy grandes (millones de productos)
+      // se recomendaría implementar una solución de búsqueda más avanzada como Elasticsearch
+      
+      // Crear una versión serializable del filtro para el log
+      const logFilter = JSON.parse(JSON.stringify(filter, (key, value) => {
+        if (value instanceof RegExp) {
+          return { $regex: value.source, $options: value.flags };
+        }
+        return value;
+      }));
+      
+      console.log('Filtro de búsqueda optimizado:', JSON.stringify(logFilter));
+    }
+    
+    // Configurar opciones de proyección y ordenamiento
+    const projection = {};
+    let sortOptions = {};
+    
+    // Procesar el ordenamiento
+    // Para búsquedas con regex no podemos usar textScore, así que usamos otros criterios
+    if (sort === '-fecha_creacion' || !sort) {
+      // Ordenamiento por defecto: productos más recientes primero
+      sortOptions = { fecha_creacion: -1 };
+    } else {
+      // Si el usuario especificó un ordenamiento personalizado, respetarlo
+      sortOptions = sort.startsWith('-') 
+        ? { [sort.substring(1)]: -1 }
+        : { [sort]: 1 };
+    }
+    
+    // Ejecutar consulta paginada y contar total en paralelo
+    const [products, total] = await Promise.all([
+      Product.find(filter, projection)
+        .populate('categoria_id', 'nombre')
+        .populate('subcategoria_id', 'nombre')
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        // Usar lean() para optimizar rendimiento (devuelve objetos JS planos)
+        .lean(),
+      Product.countDocuments(filter)
+    ]);
+    
+    // Registrar la cantidad de productos encontrados
+    console.log(`Se encontraron ${total} productos que coinciden con los filtros.`);
+    
+    // Calcular metadatos de paginación
+    const totalPages = Math.ceil(total / limitNum);
     
     return res.status(200).json({
       success: true,
-      count: products.length,
-      data: products
+      data: products,
+      total,         // Total de productos que coinciden con los filtros
+      count: products.length, // Número de productos en la página actual
+      page: pageNum,  // Página actual
+      pages: totalPages, // Total de páginas
+      limit: limitNum  // Límite por página
     });
   } catch (error) {
     console.error('Error al obtener productos:', error);
