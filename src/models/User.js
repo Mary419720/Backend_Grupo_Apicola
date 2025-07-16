@@ -35,6 +35,10 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
   },
+  favorites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product'
+  }],
   // Podrías añadir más campos si los necesitas, como:
   // telefono: String,
   // direccion: String,
@@ -58,6 +62,6 @@ userSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-const User = mongoose.model('User', userSchema);
+const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 module.exports = User;

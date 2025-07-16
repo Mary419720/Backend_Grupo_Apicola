@@ -269,6 +269,40 @@ exports.getProductById = async (req, res, next) => {
   }
 };
 
+// @desc    Obtener múltiples productos por un array de IDs
+// @route   POST /api/products/by-ids
+// @access  Public
+exports.getProductsByIds = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Se requiere un array de IDs de productos.'
+      });
+    }
+
+    // Filtrar solo los productos que no han sido eliminados
+    const products = await Product.find({
+      '_id': { $in: ids.map(id => new mongoose.Types.ObjectId(id)) },
+      'eliminado': { $ne: true }
+    })
+    .populate('categoria_id', 'nombre')
+    .populate('subcategoria_id', 'nombre')
+    .lean();
+
+    // Opcional: Mantener el orden original de los IDs solicitados
+    const orderedProducts = ids.map(id => products.find(p => p._id.toString() === id)).filter(Boolean);
+
+    res.status(200).json(orderedProducts);
+
+  } catch (error) {
+    console.error('Error al obtener productos por IDs:', error);
+    next(error);
+  }
+};
+
 // @desc    Actualizar un producto
 // @route   PUT /api/products/:id
 // @access  Private (Solo administradores)

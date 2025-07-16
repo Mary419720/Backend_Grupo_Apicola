@@ -2,8 +2,8 @@ const User = require('../models/user');
 const jwt = require('jsonwebtoken');
 
 // Función auxiliar para generar un token JWT
-const generateToken = (id, rol) => {
-  return jwt.sign({ id, rol }, process.env.JWT_SECRET, {
+const generateToken = (id, rol, name, email) => {
+  return jwt.sign({ id, rol, name, email }, process.env.JWT_SECRET, {
     expiresIn: '1d', // El token expirará en 1 día
   });
 };
@@ -33,7 +33,7 @@ exports.registerUser = async (req, res, next) => {
 
     // 3. Generar token y enviar respuesta
     if (user) {
-      const token = generateToken(user._id, user.rol);
+      const token = generateToken(user._id, user.rol, user.name, user.email);
       res.status(201).json({
         message: 'Usuario registrado exitosamente',
         token,
@@ -74,7 +74,7 @@ exports.loginUser = async (req, res, next) => {
       user.lastLogin = Date.now();
       await user.save({ validateBeforeSave: false }); // Guardar sin re-validar todo
 
-      const token = generateToken(user._id, user.rol);
+      const token = generateToken(user._id, user.rol, user.name, user.email);
       res.status(200).json({
         message: 'Inicio de sesión exitoso',
         token,

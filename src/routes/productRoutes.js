@@ -12,6 +12,9 @@ router.route('/')
   .get(productController.getAllProducts)
   .post(protect, authorize('administrador'), upload.array('imagenes', 5), productController.createProduct);
 
+// Ruta para obtener productos por un array de IDs (para la página de favoritos)
+router.post('/by-ids', productController.getProductsByIds);
+
 // Ruta para eliminar una presentación específica de un producto
 router.route('/:productId/presentations/:presentationId')
   .delete(protect, authorize('administrador'), productController.deletePresentation);
