@@ -15,14 +15,19 @@ const storage = multer.diskStorage({
 
 // Filtro para aceptar solo archivos de imagen
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png/;
-  const mimetype = allowedTypes.test(file.mimetype);
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  // Comprobar si el archivo es una imagen válida.
+  const filetypes = /jpeg|jpg|png|webp/;
+  const isImageType = filetypes.test(file.mimetype) && filetypes.test(path.extname(file.originalname).toLowerCase());
 
-  if (mimetype && extname) {
-    return cb(null, true);
+  if (isImageType) {
+    // El archivo es válido, aceptarlo.
+    cb(null, true);
+  } else {
+    // El archivo no es válido. Rechazarlo de forma segura sin colapsar la petición.
+    // También podemos adjuntar un error al request para que el controlador lo sepa.
+    req.fileValidationError = 'Error: Solo se permiten archivos de imagen (jpeg, jpg, png, webp).';
+    cb(null, false);
   }
-  cb(new Error('Error: Solo se permiten archivos de imagen (jpeg, jpg, png)!'));
 };
 
 const upload = multer({

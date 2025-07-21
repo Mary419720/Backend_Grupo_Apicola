@@ -8,9 +8,14 @@ const upload = require('../middleware/uploadMiddleware');
 router.get('/search', productController.searchProducts);
 
 // Rutas CRUD básicas para productos
+const productUpload = upload.fields([
+  { name: 'producto', maxCount: 1 }, // Espera un campo de texto 'producto'
+  { name: 'imagenes', maxCount: 5 }  // Espera hasta 5 archivos en 'imagenes'
+]);
+
 router.route('/')
   .get(productController.getAllProducts)
-  .post(protect, authorize('administrador'), upload.array('imagenes', 5), productController.createProduct);
+  .post(protect, authorize('administrador'), productUpload, productController.createProduct);
 
 // Ruta para obtener productos por un array de IDs (para la página de favoritos)
 router.post('/by-ids', productController.getProductsByIds);
@@ -21,7 +26,7 @@ router.route('/:productId/presentations/:presentationId')
 
 router.route('/:id')
   .get(productController.getProductById)
-  .put(protect, authorize('administrador'), upload.array('imagenes', 5), productController.updateProduct)
+  .put(protect, authorize('administrador'), productUpload, productController.updateProduct)
   .delete(protect, authorize('administrador'), productController.deleteProduct);
 
 

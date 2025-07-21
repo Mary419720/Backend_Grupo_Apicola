@@ -36,16 +36,21 @@ const corsOptions = {
 app.use(compression());
 
 app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Middlewares para parsear JSON y datos de formularios.
+// Deben registrarse antes de las rutas que los utilizan.
+app.use(express.json({ limit: '10mb' })); // Aumentar límite para posibles imágenes en base64
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Servir archivos estáticos (imágenes subidas)
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
-// 4. Rutas
+// 4. Rutas de la API
+// Nota: Las rutas que manejan multipart/form-data (subida de archivos)
+// deben usar un middleware específico como `multer` y no dependen de `express.json()`.
 app.use('/api/test', testRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
+app.use('/api/products', productRoutes); // Ahora puede manejar JSON y multipart (con multer)
 app.use('/api/categories', categoryRoutes);
 app.use('/api/subcategories', subcategoryRoutes);
 app.use('/api/sales', saleRoutes);
