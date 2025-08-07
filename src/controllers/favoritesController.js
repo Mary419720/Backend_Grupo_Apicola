@@ -1,5 +1,5 @@
-const User = require('../models/user');
-const Product = require('../models/product.js'); // Asegúrate que la ruta y el nombre del modelo son correctos
+const User = require('../models/User');
+const Product = require('../models/product');
 const asyncHandler = require('../middleware/asyncHandler'); // Middleware para manejar errores asíncronos
 
 // @desc    Añadir un producto a favoritos
