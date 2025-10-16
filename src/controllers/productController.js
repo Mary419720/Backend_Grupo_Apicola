@@ -1,7 +1,8 @@
-const Product = require('../models/product');
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
+const Product = require('../models/product');
+const asyncHandler = require('../middleware/asyncHandler');
 const ExcelJS = require('exceljs');
 
 // @desc    Crear un nuevo producto
@@ -311,100 +312,80 @@ exports.getProductsByIds = async (req, res, next) => {
 // @desc    Actualizar un producto
 // @route   PUT /api/products/:id
 // @access  Private (Solo administradores)
-exports.updateProduct = async (req, res, next) => {
-  // DIAGNÓSTICO DETALLADO: Imprimir toda la estructura del request
-  console.log('--- Iniciando updateProduct ---');
-  console.log('req.headers [Content-Type]:', req.headers['content-type']);
-  console.log('req.body:', req.body ? JSON.stringify(req.body, null, 2) : 'undefined');
-  console.log('req.files:', req.files ? JSON.stringify(Object.keys(req.files || {}), null, 2) : 'undefined');
-  if (req.files) {
-    console.log('req.files.imagenes:', req.files.imagenes ? `${req.files.imagenes.length} archivos` : 'undefined');
+exports.updateProduct = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const {
+    nombre,
+    descripcion,
+    codigo,
+    tipo,
+    categoria_id,
+    subcategoria_id,
+    etiquetas,
+    presentaciones, // Esto llegará como un string JSON
+    imagenes: keptImagesStr, // Imágenes existentes que se conservan
+  } = req.body;
+
+  const product = await Product.findById(id);
+  if (!product) {
+    return res.status(404).json({ success: false, message: 'Producto no encontrado' });
   }
-  console.log('-----------------------------');
 
-  try {
-    const { id } = req.params;
-    
-    // ACCESO SEGURO: Usar optional chaining para evitar el crash si req.body es undefined.
-    const productDataString = req.body?.producto;
+  // 1. Actualizar campos de texto
+  product.nombre = nombre || product.nombre;
+  product.descripcion = descripcion || product.descripcion;
+  product.codigo = codigo || product.codigo;
+  product.tipo = tipo || product.tipo;
+  product.categoria_id = categoria_id || product.categoria_id;
+  product.subcategoria_id = subcategoria_id || product.subcategoria_id;
+  product.etiquetas = etiquetas ? etiquetas.split(',').map(tag => tag.trim()) : product.etiquetas;
 
-    if (!productDataString) {
-      console.log('ERROR: No se encontraron datos del producto en req.body.producto');
-      return res.status(400).json({
-        success: false,
-        message: 'No se encontraron datos del producto (campo \'producto\') en la petición.'
-      });
+  // 2. Parsear y actualizar presentaciones
+  if (presentaciones) {
+    try {
+      product.presentaciones = JSON.parse(presentaciones);
+    } catch (error) {
+      return res.status(400).json({ success: false, message: 'El formato de las presentaciones es inválido.' });
     }
+  }
 
-    const productData = JSON.parse(productDataString);
-    console.log('productData parseado correctamente:', productData.nombre);
+  // 3. Lógica para manejar la actualización de imágenes
+  const oldImagePaths = product.imagenes || [];
+  let finalImagePaths = [];
 
-    // 2. Encontrar el producto existente en la base de datos
-    const product = await Product.findById(req.params.id);
-    if (!product) {
-      return res.status(404).json({ success: false, message: 'Producto no encontrado' });
-    }
+  // Añadir imágenes existentes que se conservan
+  const keptImages = keptImagesStr ? (Array.isArray(keptImagesStr) ? keptImagesStr : [keptImagesStr]) : [];
+  finalImagePaths.push(...keptImages);
 
-    // 3. Lógica para manejar la actualización de imágenes
-    const oldImagePaths = product.imagenes || [];
-    let finalImagePaths = [];
+  // Añadir las nuevas imágenes que se acaban de subir
+  if (req.files && req.files.imagenes) {
+    const newImagePaths = req.files.imagenes.map(file => `/uploads/products/${file.filename}`);
+    finalImagePaths.push(...newImagePaths);
+  }
 
-    // Las imágenes existentes que se conservan vienen en `productData.imagenes` como strings
-    const keptImages = productData.imagenes || [];
-    finalImagePaths.push(...keptImages);
-    console.log(`Manteniendo ${keptImages.length} imágenes existentes`);
-
-    // Añadir las nuevas imágenes que se acaban de subir
-    // CORRECCIÓN: Cuando se usa upload.fields(), req.files es un objeto con claves, no un array
-    if (req.files && req.files.imagenes && req.files.imagenes.length > 0) {
-      console.log(`Procesando ${req.files.imagenes.length} nuevas imágenes`);
-      const newImagePaths = req.files.imagenes.map(file => `/uploads/products/${file.filename}`);
-      finalImagePaths.push(...newImagePaths);
-    } else {
-      console.log('No hay nuevas imágenes para procesar');
-    }
-
-    // 4. Limpiar del servidor las imágenes que ya no se usan
-    oldImagePaths.forEach(oldPath => {
-      if (!finalImagePaths.includes(oldPath)) {
-        const fullPath = path.join(__dirname, '../../public', oldPath);
-        if (fs.existsSync(fullPath)) {
-          console.log(`Eliminando imagen no utilizada: ${oldPath}`);
-          fs.unlinkSync(fullPath);
-        }
+  // 4. Limpiar del servidor las imágenes que ya no se usan
+  oldImagePaths.forEach(oldPath => {
+    if (!finalImagePaths.includes(oldPath)) {
+      // CORRECCIÓN: La ruta de borrado debe coincidir con la estructura del servidor.
+      // __dirname apunta a 'src/controllers', por lo que retrocedemos dos niveles hasta la raíz del backend.
+      const fullPath = path.join(__dirname, '..', '..', 'public', oldPath.replace('/uploads', ''));
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
       }
-    });
-
-    // 5. Asignar la lista final de imágenes y actualizar el producto
-    productData.imagenes = finalImagePaths;
-    console.log(`Total de imágenes finales: ${finalImagePaths.length}`);
-
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      productData,
-      { new: true, runValidators: true, context: 'query' }
-    );
-
-    console.log('Producto actualizado exitosamente');
-    res.status(200).json({
-      success: true,
-      message: 'Producto actualizado exitosamente',
-      data: updatedProduct
-    });
-
-  } catch (error) {
-    console.error('Error al actualizar producto:', error);
-    // Si el error es de parseo de JSON, es un Bad Request
-    if (error instanceof SyntaxError) {
-      return res.status(400).json({ success: false, message: 'Datos del producto mal formados.' });
     }
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(val => val.message);
-      return res.status(400).json({ success: false, message: 'Error de validación', errors: messages });
-    }
-    next(error);
-  }
-};
+  });
+
+  product.imagenes = finalImagePaths;
+
+  // 5. Guardar el producto actualizado
+  const updatedProduct = await product.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Producto actualizado exitosamente',
+    data: updatedProduct,
+  });
+});
 
 // @desc    Eliminar un producto (soft delete)
 // @route   DELETE /api/products/:id

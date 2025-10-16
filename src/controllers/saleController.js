@@ -169,7 +169,7 @@ exports.getDashboardData = asyncHandler(async (req, res, next) => {
   const labels = monthlySales.map(s => monthNames[s._id.month - 1]);
   const salesData = monthlySales.map(s => s.total);
 
-  console.log('[Backend] Dashboard Data:', { totalSales: totalSalesResult[0]?.total || 0, totalProducts, monthlySales });
+  console.log('[Backend] Dashboard Data:', { totalSales: totalSalesResult.length > 0 ? totalSalesResult[0].total : 0, totalProducts, monthlySales });
 
   res.status(200).json({
     totalSales: totalSalesResult.length > 0 ? totalSalesResult[0].total : 0,
