@@ -19,7 +19,12 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // 3. Middlewares
-const allowedOrigins = [process.env.FRONTEND_URL || 'http://localhost:4200'];
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:4200',
+  'https://tumelarium.netlify.app',
+  'https://68f172107791c200b38472c2--tumelarium.netlify.app'
+];
+
 const corsOptions = {
   origin: function (origin, callback) {
     // Permitir peticiones sin 'origin' (como las de Postman o apps móviles) o si el origen está en la lista
