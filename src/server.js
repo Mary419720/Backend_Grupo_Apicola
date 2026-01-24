@@ -22,7 +22,8 @@ const PORT = process.env.PORT || 3001;
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:4200',
   'https://tumelarium.netlify.app',
-  'https://68f172107791c200b38472c2--tumelarium.netlify.app'
+  'https://68f172107791c200b38472c2--tumelarium.netlify.app',
+  'http://localhost:8888', 
 ];
 
 const corsOptions = {
